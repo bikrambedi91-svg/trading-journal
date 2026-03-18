@@ -2258,8 +2258,8 @@ function InsightsDashboard({ trades }: { trades: TradeRecord[] }) {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
             <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} width={45} />
-            <RechartsTooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px", fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), "Equity"]} />
+            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`} width={45} />
+            <RechartsTooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px", fontSize: 12 }} formatter={(value) => [formatCurrency(Number(value)), "Equity"]} />
             <Area type="monotone" dataKey="equity" stroke={CHART_COLORS.emerald} strokeWidth={2} fill="url(#equityGrad)" />
           </AreaChart>
         </ResponsiveContainer>
@@ -2272,8 +2272,8 @@ function InsightsDashboard({ trades }: { trades: TradeRecord[] }) {
           <BarChart data={monthlyData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
             <XAxis dataKey="month" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} width={50} />
-            <RechartsTooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px", fontSize: 12 }} formatter={(value: number) => [formatCurrency(value), "P&L"]} />
+            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} width={50} />
+            <RechartsTooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px", fontSize: 12 }} formatter={(value) => [formatCurrency(Number(value)), "P&L"]} />
             <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
               {monthlyData.map((entry, idx) => <Cell key={idx} fill={entry.pnl >= 0 ? CHART_COLORS.emerald : CHART_COLORS.rose} />)}
             </Bar>
