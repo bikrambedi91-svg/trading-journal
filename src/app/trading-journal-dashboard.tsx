@@ -2687,9 +2687,214 @@ function CalculatorResultRow({ label, value, subtext, variant = "neutral", large
 }
 
 // --- Calculator stubs (replaced in Tasks 8-16) ---
-function PositionSizeCalc() { return <p className="text-slate-400 text-sm">Position Size Calculator — implementing...</p> }
-function RiskRewardCalc() { return <p className="text-slate-400 text-sm">Risk/Reward Calculator — implementing...</p> }
-function PnlCalc() { return <p className="text-slate-400 text-sm">P&amp;L Calculator — implementing...</p> }
+function PositionSizeCalc() {
+  const [accountSize, setAccountSize] = useState("")
+  const [riskPercent, setRiskPercent] = useState("1")
+  const [entryPrice, setEntryPrice] = useState("")
+  const [stopLoss, setStopLoss] = useState("")
+
+  const results = useMemo(() => {
+    const acc = parseFloat(accountSize)
+    const riskPct = parseFloat(riskPercent)
+    const entry = parseFloat(entryPrice)
+    const sl = parseFloat(stopLoss)
+
+    if (!acc || !riskPct || !entry || !sl || entry === sl) return null
+
+    const riskAmount = acc * (riskPct / 100)
+    const riskPerShare = Math.abs(entry - sl)
+    const positionSize = Math.floor(riskAmount / riskPerShare)
+    const totalValue = positionSize * entry
+    const pctOfAccount = (totalValue / acc) * 100
+    const direction = sl < entry ? "LONG" : "SHORT"
+
+    return { riskAmount, positionSize, totalValue, pctOfAccount, direction, riskPerShare }
+  }, [accountSize, riskPercent, entryPrice, stopLoss])
+
+  const handleReset = useCallback(() => {
+    setAccountSize("")
+    setRiskPercent("1")
+    setEntryPrice("")
+    setStopLoss("")
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <CalculatorField label="Account Size" value={accountSize} onChange={setAccountSize} prefix="$" placeholder="50,000" helperText="Your total trading account balance — check your broker's account summary page" />
+        <CalculatorField label="Risk per Trade" value={riskPercent} onChange={setRiskPercent} suffix="%" placeholder="1" step="0.25" min={0.1} max={100} helperText="% of account you're willing to lose on this trade. Most pros risk 0.5–2% per trade" />
+        <CalculatorField label="Entry Price" value={entryPrice} onChange={setEntryPrice} prefix="$" placeholder="220.00" helperText="The price you plan to enter at — use your broker's Level 2 or TradingView last price" />
+        <CalculatorField label="Stop Loss Price" value={stopLoss} onChange={setStopLoss} prefix="$" placeholder="215.00" helperText="Your invalidation level — the price where your thesis is wrong" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 mb-4">
+              <Badge variant={results.direction === "LONG" ? "success" : "danger"}>
+                {results.direction === "LONG" ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                <span className="ml-1">{results.direction}</span>
+              </Badge>
+              <span className="text-xs text-slate-500">Inferred from entry vs stop loss</span>
+            </div>
+            <CalculatorResultRow label="Risk Amount" value={`$${results.riskAmount.toFixed(2)}`} subtext={`${riskPercent}% of account`} />
+            <CalculatorResultRow label="Risk Per Share" value={`$${results.riskPerShare.toFixed(2)}`} subtext="Distance to stop loss" />
+            <CalculatorResultRow label="Position Size" value={`${results.positionSize} shares`} variant="profit" large />
+            <CalculatorResultRow label="Total Position Value" value={`$${results.totalValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+            <CalculatorResultRow label="% of Account" value={`${results.pctOfAccount.toFixed(1)}%`} variant={results.pctOfAccount > 100 ? "loss" : results.pctOfAccount > 50 ? "warning" : "neutral"} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in all fields to see results</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RiskRewardCalc() {
+  const [entryPrice, setEntryPrice] = useState("")
+  const [stopLoss, setStopLoss] = useState("")
+  const [takeProfit, setTakeProfit] = useState("")
+  const [winRate, setWinRate] = useState("50")
+
+  const results = useMemo(() => {
+    const entry = parseFloat(entryPrice)
+    const sl = parseFloat(stopLoss)
+    const tp = parseFloat(takeProfit)
+    const wr = parseFloat(winRate) / 100
+
+    if (!entry || !sl || !tp || isNaN(wr)) return null
+
+    const risk = Math.abs(entry - sl)
+    const reward = Math.abs(tp - entry)
+    if (risk === 0) return null
+
+    const rr = reward / risk
+    const breakEvenWr = (1 / (1 + rr)) * 100
+    const ev = (wr * reward) - ((1 - wr) * risk)
+
+    return { risk, reward, rr, breakEvenWr, ev, winRateDecimal: wr }
+  }, [entryPrice, stopLoss, takeProfit, winRate])
+
+  const handleReset = useCallback(() => {
+    setEntryPrice(""); setStopLoss(""); setTakeProfit(""); setWinRate("50")
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <CalculatorField label="Entry Price" value={entryPrice} onChange={setEntryPrice} prefix="$" placeholder="220.00" helperText="Your planned entry price" />
+        <CalculatorField label="Stop Loss" value={stopLoss} onChange={setStopLoss} prefix="$" placeholder="215.00" helperText="Price where you'll exit if wrong" />
+        <CalculatorField label="Take Profit" value={takeProfit} onChange={setTakeProfit} prefix="$" placeholder="232.00" helperText="Your target exit price — use key levels, supply/demand zones, or prior highs/lows on chart" />
+        <CalculatorField label="Win Rate" value={winRate} onChange={setWinRate} suffix="%" placeholder="50" helperText="Your historical win rate — find this on your journal's Insights panel under 'Win Rate'" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-1">
+            <div className="mb-4">
+              <div className="flex rounded-lg overflow-hidden h-8">
+                <div className="bg-red-500/30 border-r border-slate-700 flex items-center justify-center text-xs font-mono text-red-300" style={{ width: `${(results.risk / (results.risk + results.reward)) * 100}%` }}>
+                  Risk ${results.risk.toFixed(2)}
+                </div>
+                <div className="bg-emerald-500/30 flex items-center justify-center text-xs font-mono text-emerald-300" style={{ width: `${(results.reward / (results.risk + results.reward)) * 100}%` }}>
+                  Reward ${results.reward.toFixed(2)}
+                </div>
+              </div>
+            </div>
+            <CalculatorResultRow label="R:R Ratio" value={`${results.rr.toFixed(2)} : 1`} variant={results.rr >= 2 ? "profit" : results.rr >= 1 ? "warning" : "loss"} large />
+            <CalculatorResultRow label="Risk (points)" value={`$${results.risk.toFixed(2)}`} variant="loss" />
+            <CalculatorResultRow label="Reward (points)" value={`$${results.reward.toFixed(2)}`} variant="profit" />
+            <CalculatorResultRow label="Breakeven Win Rate" value={`${results.breakEvenWr.toFixed(1)}%`} subtext={`You need to win ≥${results.breakEvenWr.toFixed(0)}% of the time at this R:R`} />
+            <CalculatorResultRow label="Expected Value" value={`$${results.ev.toFixed(2)} per trade`} variant={results.ev > 0 ? "profit" : results.ev < 0 ? "loss" : "neutral"} subtext={results.ev > 0 ? "Positive edge — this setup is profitable over time" : "Negative edge — improve R:R or win rate"} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in all fields to see results</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PnlCalc() {
+  const [direction, setDirection] = useState<"long" | "short">("long")
+  const [entryPrice, setEntryPrice] = useState("")
+  const [exitPrice, setExitPrice] = useState("")
+  const [quantity, setQuantity] = useState("1")
+  const [commission, setCommission] = useState("0")
+  const [otherFees, setOtherFees] = useState("0")
+
+  const results = useMemo(() => {
+    const entry = parseFloat(entryPrice)
+    const exit = parseFloat(exitPrice)
+    const qty = parseFloat(quantity)
+    const comm = parseFloat(commission) || 0
+    const fees = parseFloat(otherFees) || 0
+
+    if (!entry || !exit || !qty) return null
+
+    const dirMult = direction === "long" ? 1 : -1
+    const grossPnl = (exit - entry) * qty * dirMult
+    const totalFees = (comm * 2) + fees
+    const netPnl = grossPnl - totalFees
+    const returnPct = (netPnl / (entry * qty)) * 100
+    const breakeven = direction === "long" ? entry + (totalFees / qty) : entry - (totalFees / qty)
+
+    return { grossPnl, totalFees, netPnl, returnPct, breakeven }
+  }, [direction, entryPrice, exitPrice, quantity, commission, otherFees])
+
+  const handleReset = useCallback(() => {
+    setDirection("long"); setEntryPrice(""); setExitPrice(""); setQuantity("1"); setCommission("0"); setOtherFees("0")
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Direction</label>
+          <div className="flex rounded-lg overflow-hidden border border-slate-700" role="radiogroup">
+            {(["long", "short"] as const).map((dir) => (
+              <button key={dir} role="radio" aria-checked={direction === dir} onClick={() => setDirection(dir)} className={classNames("flex-1 py-2 text-sm font-semibold uppercase transition-colors", direction === dir ? dir === "long" ? "bg-emerald-600 text-white" : "bg-red-600 text-white" : "bg-slate-800/50 text-slate-400 hover:text-slate-200")}>
+                {dir === "long" ? "↑ Long" : "↓ Short"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <CalculatorField label="Entry Price" value={entryPrice} onChange={setEntryPrice} prefix="$" placeholder="220.00" helperText="Price you bought/shorted at" />
+        <CalculatorField label="Exit Price" value={exitPrice} onChange={setExitPrice} prefix="$" placeholder="235.00" helperText="Price you sold/covered at" />
+        <CalculatorField label="Quantity" value={quantity} onChange={setQuantity} placeholder="100" helperText="Number of shares, contracts, or units" />
+        <CalculatorField label="Commission (per trade)" value={commission} onChange={setCommission} prefix="$" placeholder="0.00" helperText="Check your broker's fee schedule — e.g., IBKR: $0.005/share, Webull/Robinhood: $0" />
+        <CalculatorField label="Other Fees" value={otherFees} onChange={setOtherFees} prefix="$" placeholder="0.00" helperText="SEC fees, exchange fees, ECN fees — usually shown on your trade confirmation" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-1">
+            <CalculatorResultRow label="Gross P&L" value={`${results.grossPnl >= 0 ? "+" : ""}$${results.grossPnl.toFixed(2)}`} variant={results.grossPnl >= 0 ? "profit" : "loss"} />
+            <CalculatorResultRow label="Total Fees" value={`-$${results.totalFees.toFixed(2)}`} subtext="Round-trip commissions + other fees" variant="loss" />
+            <CalculatorResultRow label="Net P&L" value={`${results.netPnl >= 0 ? "+" : ""}$${results.netPnl.toFixed(2)}`} variant={results.netPnl >= 0 ? "profit" : "loss"} large />
+            <CalculatorResultRow label="Return %" value={`${results.returnPct >= 0 ? "+" : ""}${results.returnPct.toFixed(2)}%`} variant={results.returnPct >= 0 ? "profit" : "loss"} />
+            <CalculatorResultRow label="Breakeven Price" value={`$${results.breakeven.toFixed(2)}`} subtext="Price needed to cover all fees" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in entry, exit, and quantity to see results</div>
+        )}
+      </div>
+    </div>
+  )
+}
 function OptionsCalc() { return <p className="text-slate-400 text-sm">Options Pricing Calculator — implementing...</p> }
 function CompoundGrowthCalc() { return <p className="text-slate-400 text-sm">Compound Growth Calculator — implementing...</p> }
 function MarginCalc() { return <p className="text-slate-400 text-sm">Margin Calculator — implementing...</p> }
