@@ -2895,9 +2895,277 @@ function PnlCalc() {
     </div>
   )
 }
-function OptionsCalc() { return <p className="text-slate-400 text-sm">Options Pricing Calculator — implementing...</p> }
-function CompoundGrowthCalc() { return <p className="text-slate-400 text-sm">Compound Growth Calculator — implementing...</p> }
-function MarginCalc() { return <p className="text-slate-400 text-sm">Margin Calculator — implementing...</p> }
+function OptionsCalc() {
+  const [optionType, setOptionType] = useState<"call" | "put">("call")
+  const [underlyingPrice, setUnderlyingPrice] = useState("")
+  const [strikePrice, setStrikePrice] = useState("")
+  const [dte, setDte] = useState("30")
+  const [iv, setIv] = useState("30")
+  const [riskFreeRate, setRiskFreeRate] = useState("4.3")
+
+  const results = useMemo(() => {
+    const S = parseFloat(underlyingPrice)
+    const K = parseFloat(strikePrice)
+    const daysToExpiry = parseFloat(dte)
+    const sigma = parseFloat(iv) / 100
+    const r = parseFloat(riskFreeRate) / 100
+
+    if (!S || !K || !daysToExpiry || !sigma || isNaN(r)) return null
+    if (daysToExpiry <= 0 || sigma <= 0) return null
+
+    const T = daysToExpiry / 365
+    const sqrtT = Math.sqrt(T)
+    const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * sqrtT)
+    const d2 = d1 - sigma * sqrtT
+    const Nd1 = normalCDF(d1)
+    const Nd2 = normalCDF(d2)
+    const Nnd1 = normalCDF(-d1)
+    const Nnd2 = normalCDF(-d2)
+    const phid1 = normalPDF(d1)
+    const eRT = Math.exp(-r * T)
+
+    let price: number, delta: number, thetaAnnual: number, rho: number
+
+    if (optionType === "call") {
+      price = S * Nd1 - K * eRT * Nd2
+      delta = Nd1
+      thetaAnnual = -(S * phid1 * sigma) / (2 * sqrtT) - r * K * eRT * Nd2
+      rho = K * T * eRT * Nd2 / 100
+    } else {
+      price = K * eRT * Nnd2 - S * Nnd1
+      delta = Nd1 - 1
+      thetaAnnual = -(S * phid1 * sigma) / (2 * sqrtT) + r * K * eRT * Nnd2
+      rho = -K * T * eRT * Nnd2 / 100
+    }
+
+    const gamma = phid1 / (S * sigma * sqrtT)
+    const thetaPerDay = thetaAnnual / 365
+    const vega = S * phid1 * sqrtT / 100
+    const intrinsic = optionType === "call" ? Math.max(0, S - K) : Math.max(0, K - S)
+    const extrinsic = Math.max(0, price - intrinsic)
+
+    return { price, delta, gamma, thetaPerDay, vega, rho, intrinsic, extrinsic }
+  }, [optionType, underlyingPrice, strikePrice, dte, iv, riskFreeRate])
+
+  const handleReset = useCallback(() => {
+    setOptionType("call"); setUnderlyingPrice(""); setStrikePrice(""); setDte("30"); setIv("30"); setRiskFreeRate("4.3")
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Option Type</label>
+          <div className="flex rounded-lg overflow-hidden border border-slate-700" role="radiogroup">
+            {(["call", "put"] as const).map((type) => (
+              <button key={type} role="radio" aria-checked={optionType === type} onClick={() => setOptionType(type)} className={classNames("flex-1 py-2 text-sm font-semibold uppercase transition-colors", optionType === type ? type === "call" ? "bg-emerald-600 text-white" : "bg-red-600 text-white" : "bg-slate-800/50 text-slate-400 hover:text-slate-200")}>
+                {type}
+              </button>
+            ))}
+          </div>
+        </div>
+        <CalculatorField label="Underlying Price" value={underlyingPrice} onChange={setUnderlyingPrice} prefix="$" placeholder="220.00" helperText="Current stock price — search the ticker on TradingView or your broker" />
+        <CalculatorField label="Strike Price" value={strikePrice} onChange={setStrikePrice} prefix="$" placeholder="225.00" helperText="The option's strike — found in your broker's options chain" />
+        <CalculatorField label="Days to Expiry" value={dte} onChange={setDte} placeholder="30" helperText="Calendar days until expiration — shown on the options chain header" />
+        <CalculatorField label="Implied Volatility" value={iv} onChange={setIv} suffix="%" placeholder="30" helperText="IV is listed per strike in your options chain — Thinkorswim: 'Impl Vol' column, TastyTrade: shown on the trade page" />
+        <CalculatorField label="Risk-Free Rate" value={riskFreeRate} onChange={setRiskFreeRate} suffix="%" placeholder="4.3" helperText="US 10-Year Treasury yield — search 'US10Y' on TradingView or google 'treasury yield today'" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-1">
+            <CalculatorResultRow label="Theoretical Price" value={`$${results.price.toFixed(4)}`} variant="profit" large />
+            <div className="my-3">
+              <div className="flex text-[10px] text-slate-500 justify-between mb-1">
+                <span>Intrinsic: ${results.intrinsic.toFixed(2)}</span>
+                <span>Extrinsic: ${results.extrinsic.toFixed(2)}</span>
+              </div>
+              <div className="flex rounded-lg overflow-hidden h-3 bg-slate-700/50">
+                {results.price > 0 && (<><div className="bg-blue-500/60" style={{ width: `${(results.intrinsic / results.price) * 100}%` }} /><div className="bg-purple-500/60" style={{ width: `${(results.extrinsic / results.price) * 100}%` }} /></>)}
+              </div>
+            </div>
+            <div className="pt-2 border-t border-slate-700/50">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mb-2">Greeks</p>
+            </div>
+            <CalculatorResultRow label="Delta" value={results.delta.toFixed(4)} subtext="Price change per $1 move in underlying" />
+            <CalculatorResultRow label="Gamma" value={results.gamma.toFixed(4)} subtext="Rate of change of Delta" />
+            <CalculatorResultRow label="Theta" value={`$${results.thetaPerDay.toFixed(4)}/day`} subtext="Daily time decay — how much value the option loses per day" variant="loss" />
+            <CalculatorResultRow label="Vega" value={`$${results.vega.toFixed(4)}`} subtext="Price change per 1% change in IV" />
+            <CalculatorResultRow label="Rho" value={`$${results.rho.toFixed(4)}`} subtext="Price change per 1% change in interest rate" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in underlying price and strike to see results</div>
+        )}
+      </div>
+    </div>
+  )
+}
+function CompoundGrowthCalc() {
+  const [startingCapital, setStartingCapital] = useState("")
+  const [returnPerPeriod, setReturnPerPeriod] = useState("")
+  const [periodType, setPeriodType] = useState("Weekly")
+  const [numPeriods, setNumPeriods] = useState("52")
+  const [contribution, setContribution] = useState("0")
+
+  const results = useMemo(() => {
+    const start = parseFloat(startingCapital)
+    const rate = parseFloat(returnPerPeriod) / 100
+    const periods = parseInt(numPeriods, 10)
+    const contrib = parseFloat(contribution) || 0
+
+    if (!start || isNaN(rate) || !periods || periods <= 0) return null
+
+    const chartData: { period: number; balance: number }[] = []
+    let balance = start
+    chartData.push({ period: 0, balance })
+
+    for (let i = 1; i <= periods; i++) {
+      balance = balance * (1 + rate) + contrib
+      chartData.push({ period: i, balance })
+    }
+
+    const finalBalance = balance
+    const totalContributions = start + contrib * periods
+    const totalReturn = finalBalance - totalContributions
+    const totalReturnPct = ((finalBalance - start) / start) * 100
+
+    return { finalBalance, totalReturn, totalReturnPct, totalContributions, chartData, growthFromCompounding: totalReturn }
+  }, [startingCapital, returnPerPeriod, numPeriods, contribution])
+
+  const handleReset = useCallback(() => {
+    setStartingCapital(""); setReturnPerPeriod(""); setPeriodType("Weekly"); setNumPeriods("52"); setContribution("0")
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <CalculatorField label="Starting Capital" value={startingCapital} onChange={setStartingCapital} prefix="$" placeholder="50,000" helperText="Your current account balance" />
+        <CalculatorField label="Return per Period" value={returnPerPeriod} onChange={setReturnPerPeriod} suffix="%" placeholder="2" helperText="Your average return per period — check your journal's monthly performance chart for a realistic number" />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Period Type</label>
+          <select value={periodType} onChange={(e) => setPeriodType(e.target.value)} className="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all">
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Monthly">Monthly</option>
+            <option value="Yearly">Yearly</option>
+          </select>
+        </div>
+        <CalculatorField label="Number of Periods" value={numPeriods} onChange={setNumPeriods} placeholder="52" helperText="How many periods to project — e.g., 52 weeks = 1 year, 12 months = 1 year" />
+        <CalculatorField label="Additional Contribution" value={contribution} onChange={setContribution} prefix="$" placeholder="0" helperText="Extra capital added each period — e.g., monthly deposit from salary" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <CalculatorResultRow label="Final Balance" value={`$${results.finalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} variant="profit" large />
+              <CalculatorResultRow label="Total Return" value={`+$${results.totalReturn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} subtext={`${results.totalReturnPct.toFixed(1)}% total`} variant="profit" />
+              <CalculatorResultRow label="Total Contributions" value={`$${results.totalContributions.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <CalculatorResultRow label="Growth from Compounding" value={`$${results.growthFromCompounding.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} variant="profit" />
+            </div>
+            <div className="h-48 mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={results.chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                  <defs>
+                    <linearGradient id="compoundGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="period" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} tickLine={false} />
+                  <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px", fontSize: "12px" }} labelStyle={{ color: "#94a3b8" }} formatter={(value) => [`$${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}`, "Balance"]} labelFormatter={(label) => `${periodType} ${label}`} />
+                  <Area type="monotone" dataKey="balance" stroke="#10b981" fill="url(#compoundGradient)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in starting capital and return to see projections</div>
+        )}
+      </div>
+    </div>
+  )
+}
+function MarginCalc() {
+  const [positionValue, setPositionValue] = useState("")
+  const [marginReq, setMarginReq] = useState("50")
+  const [accountEquity, setAccountEquity] = useState("")
+  const [maintenanceMargin, setMaintenanceMargin] = useState("25")
+
+  const results = useMemo(() => {
+    const posVal = parseFloat(positionValue)
+    const marginPct = parseFloat(marginReq) / 100
+    const equity = parseFloat(accountEquity)
+    const maintPct = parseFloat(maintenanceMargin) / 100
+
+    if (!posVal || !marginPct || !equity || isNaN(maintPct)) return null
+
+    const requiredMargin = posVal * marginPct
+    const buyingPower = equity / marginPct
+    const leverage = posVal / equity
+    const loan = posVal - equity
+    const marginCallThreshold = loan > 0 ? loan / (1 - maintPct) : 0
+    const availableMargin = equity - requiredMargin
+    const marginUtilization = (requiredMargin / equity) * 100
+
+    return { requiredMargin, buyingPower, leverage, marginCallThreshold, availableMargin, marginUtilization }
+  }, [positionValue, marginReq, accountEquity, maintenanceMargin])
+
+  const handleReset = useCallback(() => {
+    setPositionValue(""); setMarginReq("50"); setAccountEquity(""); setMaintenanceMargin("25")
+  }, [])
+
+  const utilizationColor = results ? results.marginUtilization > 80 ? "text-red-400" : results.marginUtilization > 60 ? "text-amber-400" : "text-emerald-400" : "text-slate-400"
+  const utilizationBg = results ? results.marginUtilization > 80 ? "bg-red-500" : results.marginUtilization > 60 ? "bg-amber-500" : "bg-emerald-500" : "bg-slate-600"
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <CalculatorField label="Position Value" value={positionValue} onChange={setPositionValue} prefix="$" placeholder="10,000" helperText="Total value of the position = Price × Quantity" />
+        <CalculatorField label="Margin Requirement" value={marginReq} onChange={setMarginReq} suffix="%" placeholder="50" helperText="Your broker's initial margin rate — Reg-T stocks: 50%, Futures: varies by contract. Day trading (PDT): 25%" />
+        <CalculatorField label="Account Equity" value={accountEquity} onChange={setAccountEquity} prefix="$" placeholder="50,000" helperText="Your account's net liquidation value — found on broker's account summary or portfolio page" />
+        <CalculatorField label="Maintenance Margin" value={maintenanceMargin} onChange={setMaintenanceMargin} suffix="%" placeholder="25" helperText="Minimum equity % before margin call — Reg-T default: 25%, but brokers may require 30–40%" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-4">
+            <div className="text-center mb-2">
+              <p className={classNames("text-3xl font-bold font-mono tabular-nums", utilizationColor)}>{results.marginUtilization.toFixed(1)}%</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Margin Utilization</p>
+              <div className="mt-2 h-2.5 bg-slate-700/50 rounded-full overflow-hidden">
+                <div className={classNames("h-full rounded-full transition-all duration-500", utilizationBg)} style={{ width: `${Math.min(100, results.marginUtilization)}%` }} />
+              </div>
+            </div>
+            <div className="space-y-1 pt-2">
+              <CalculatorResultRow label="Required Margin" value={`$${results.requiredMargin.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+              <CalculatorResultRow label="Buying Power" value={`$${results.buyingPower.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} variant="profit" />
+              <CalculatorResultRow label="Leverage Ratio" value={`${results.leverage.toFixed(2)} : 1`} variant={results.leverage > 4 ? "loss" : results.leverage > 2 ? "warning" : "neutral"} />
+              <CalculatorResultRow label="Margin Call Threshold" value={`$${results.marginCallThreshold.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} subtext="Your position value must stay above this to avoid a margin call" variant="warning" />
+              <CalculatorResultRow label="Available Margin" value={`$${results.availableMargin.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} variant={results.availableMargin < 0 ? "loss" : "profit"} />
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in position value and account equity to see results</div>
+        )}
+      </div>
+    </div>
+  )
+}
 function FibonacciCalc() { return <p className="text-slate-400 text-sm">Fibonacci Levels Calculator — implementing...</p> }
 function BreakEvenCalc() { return <p className="text-slate-400 text-sm">Break-Even Calculator — implementing...</p> }
 function AdrCalc() { return <p className="text-slate-400 text-sm">ADR% Calculator — implementing...</p> }
