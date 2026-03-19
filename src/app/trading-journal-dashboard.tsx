@@ -105,6 +105,8 @@ import {
   User,
   Bell,
   ExternalLink,
+  Calculator,
+  Ruler,
 } from "lucide-react"
 
 // ---------------------------------------------------------------------------
@@ -236,6 +238,34 @@ type TradeAction =
 
 interface TradeState {
   trades: TradeRecord[]
+}
+
+// ---------------------------------------------------------------------------
+// Calculator Types
+// ---------------------------------------------------------------------------
+
+type CalculatorId =
+  | "position-size"
+  | "risk-reward"
+  | "pnl"
+  | "options"
+  | "compound-growth"
+  | "margin"
+  | "fibonacci"
+  | "break-even"
+  | "adr"
+
+interface CalculatorMeta {
+  id: CalculatorId
+  name: string
+  description: string
+  icon: React.ComponentType<{ className?: string; size?: number }>
+  color: string
+}
+
+interface OpenCalculatorTab {
+  id: CalculatorId
+  openedAt: number
 }
 
 // ---------------------------------------------------------------------------
@@ -451,6 +481,30 @@ function getMaxDrawdown(trades: TradeRecord[]): number {
     if (dd > maxDd) maxDd = dd
   }
   return maxDd
+}
+
+// ---------------------------------------------------------------------------
+// Math Utilities (Black-Scholes)
+// ---------------------------------------------------------------------------
+
+function normalCDF(x: number): number {
+  if (x < -10) return 0
+  if (x > 10) return 1
+  const a1 = 0.254829592
+  const a2 = -0.284496736
+  const a3 = 1.421413741
+  const a4 = -1.453152027
+  const a5 = 1.061405429
+  const p = 0.3275911
+  const sign = x < 0 ? -1 : 1
+  const absX = Math.abs(x)
+  const t = 1.0 / (1.0 + p * absX)
+  const y = 1.0 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX / 2)
+  return 0.5 * (1.0 + sign * y)
+}
+
+function normalPDF(x: number): number {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI)
 }
 
 // ---------------------------------------------------------------------------
@@ -1115,6 +1169,7 @@ const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "journal", label: "Journal", icon: BookOpen },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
+  { key: "calculators", label: "Calculators", icon: Calculator },
   { key: "calendar", label: "Calendar", icon: Calendar },
   { key: "strategies", label: "Strategies", icon: Crosshair },
   { key: "settings", label: "Settings", icon: Settings },
@@ -2470,6 +2525,345 @@ function Footer() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// SECTION 5: Calculators Page
+// ---------------------------------------------------------------------------
+
+const CALCULATOR_REGISTRY: CalculatorMeta[] = [
+  { id: "position-size", name: "Position Size", description: "Calculate optimal position size based on risk tolerance", icon: Target, color: "emerald" },
+  { id: "risk-reward", name: "Risk / Reward", description: "Evaluate R:R ratio and expected value of a trade setup", icon: Scale, color: "blue" },
+  { id: "pnl", name: "Profit / Loss", description: "Calculate exact P&L including all fees and commissions", icon: DollarSign, color: "emerald" },
+  { id: "options", name: "Options Pricing", description: "Black-Scholes fair value and Greeks for any option", icon: Brain, color: "purple" },
+  { id: "compound-growth", name: "Compound Growth", description: "Project account growth with compounding over time", icon: TrendingUp, color: "cyan" },
+  { id: "margin", name: "Margin Calculator", description: "Determine margin requirements, buying power, and leverage", icon: Shield, color: "amber" },
+  { id: "fibonacci", name: "Fibonacci Levels", description: "Calculate key retracement and extension price levels", icon: Ruler, color: "orange" },
+  { id: "break-even", name: "Break-Even Analysis", description: "Determine if your trading system is profitable long-term", icon: Activity, color: "pink" },
+  { id: "adr", name: "ADR% Calculator", description: "Average Daily Range for setting realistic targets and stops", icon: BarChart3, color: "teal" },
+]
+
+interface CalculatorFieldProps {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  helperText?: string
+  prefix?: string
+  suffix?: string
+  type?: string
+  placeholder?: string
+  error?: string
+  min?: number
+  max?: number
+  step?: string
+  className?: string
+}
+
+function CalculatorField({
+  label,
+  value,
+  onChange,
+  helperText,
+  prefix,
+  suffix,
+  type = "number",
+  placeholder,
+  error,
+  min,
+  max,
+  step,
+  className = "",
+}: CalculatorFieldProps) {
+  const [showHelper, setShowHelper] = useState(false)
+
+  return (
+    <div className={classNames("flex flex-col gap-1.5", className)}>
+      <div className="flex items-center gap-1.5">
+        <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          {label}
+        </label>
+        {helperText && (
+          <button
+            type="button"
+            className="text-slate-500 hover:text-emerald-400 transition-colors focus:outline-none"
+            onClick={() => setShowHelper(!showHelper)}
+            onMouseEnter={() => setShowHelper(true)}
+            onMouseLeave={() => setShowHelper(false)}
+            aria-label={`Info about ${label}`}
+          >
+            <Info size={13} />
+          </button>
+        )}
+      </div>
+      {showHelper && helperText && (
+        <p className="text-xs text-slate-500 bg-slate-800/60 rounded-md px-2.5 py-1.5 border border-slate-700/50">
+          {helperText}
+        </p>
+      )}
+      <div className="relative flex items-center">
+        {prefix && (
+          <span className="absolute left-3 text-xs text-slate-500 pointer-events-none select-none">
+            {prefix}
+          </span>
+        )}
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          min={min}
+          max={max}
+          step={step}
+          className={classNames(
+            "w-full bg-slate-900/80 border border-slate-700 rounded-lg py-2 text-sm text-slate-100 placeholder-slate-500",
+            "focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 transition-all duration-200",
+            "font-mono tabular-nums",
+            prefix ? "pl-7 pr-3" : "px-3",
+            suffix ? "pr-8" : "",
+            error && "border-red-500 focus:ring-red-500/40 focus:border-red-500"
+          )}
+        />
+        {suffix && (
+          <span className="absolute right-3 text-xs text-slate-500 pointer-events-none select-none">
+            {suffix}
+          </span>
+        )}
+      </div>
+      {error && <span className="text-xs text-red-400">{error}</span>}
+    </div>
+  )
+}
+
+interface CalculatorResultRowProps {
+  label: string
+  value: string
+  subtext?: string
+  variant?: "neutral" | "profit" | "loss" | "warning"
+  large?: boolean
+}
+
+function CalculatorResultRow({ label, value, subtext, variant = "neutral", large = false }: CalculatorResultRowProps) {
+  const [copied, setCopied] = useState(false)
+
+  const colorMap: Record<string, string> = {
+    neutral: "text-slate-100",
+    profit: "text-emerald-400",
+    loss: "text-red-400",
+    warning: "text-amber-400",
+  }
+
+  const handleCopy = useCallback(() => {
+    const raw = value.replace(/[^0-9.\-]/g, "")
+    navigator.clipboard.writeText(raw || value).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }, [value])
+
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-slate-800/50 last:border-b-0 group">
+      <div className="flex flex-col">
+        <span className="text-xs text-slate-400 uppercase tracking-wider">{label}</span>
+        {subtext && <span className="text-[10px] text-slate-500">{subtext}</span>}
+      </div>
+      <div className="flex items-center gap-2">
+        <span
+          className={classNames(
+            "font-mono tabular-nums font-semibold",
+            large ? "text-xl" : "text-sm",
+            colorMap[variant]
+          )}
+        >
+          {value}
+        </span>
+        <button
+          onClick={handleCopy}
+          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-emerald-400 transition-all"
+          aria-label={`Copy ${label}`}
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// --- Calculator stubs (replaced in Tasks 8-16) ---
+function PositionSizeCalc() { return <p className="text-slate-400 text-sm">Position Size Calculator — implementing...</p> }
+function RiskRewardCalc() { return <p className="text-slate-400 text-sm">Risk/Reward Calculator — implementing...</p> }
+function PnlCalc() { return <p className="text-slate-400 text-sm">P&amp;L Calculator — implementing...</p> }
+function OptionsCalc() { return <p className="text-slate-400 text-sm">Options Pricing Calculator — implementing...</p> }
+function CompoundGrowthCalc() { return <p className="text-slate-400 text-sm">Compound Growth Calculator — implementing...</p> }
+function MarginCalc() { return <p className="text-slate-400 text-sm">Margin Calculator — implementing...</p> }
+function FibonacciCalc() { return <p className="text-slate-400 text-sm">Fibonacci Levels Calculator — implementing...</p> }
+function BreakEvenCalc() { return <p className="text-slate-400 text-sm">Break-Even Calculator — implementing...</p> }
+function AdrCalc() { return <p className="text-slate-400 text-sm">ADR% Calculator — implementing...</p> }
+
+function CalculatorCard({
+  meta,
+  isOpen,
+  onClick,
+}: {
+  meta: CalculatorMeta
+  isOpen: boolean
+  onClick: () => void
+}) {
+  const Icon = meta.icon
+  const bgColorMap: Record<string, string> = {
+    emerald: "bg-emerald-500/15 text-emerald-400",
+    blue: "bg-blue-500/15 text-blue-400",
+    purple: "bg-purple-500/15 text-purple-400",
+    cyan: "bg-cyan-500/15 text-cyan-400",
+    amber: "bg-amber-500/15 text-amber-400",
+    orange: "bg-orange-500/15 text-orange-400",
+    pink: "bg-pink-500/15 text-pink-400",
+    teal: "bg-teal-500/15 text-teal-400",
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className={classNames(
+        "relative text-left p-4 rounded-xl border transition-all duration-200 group",
+        "bg-slate-900/80 backdrop-blur-xl hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20",
+        isOpen
+          ? "border-emerald-500/50 shadow-lg shadow-emerald-500/10"
+          : "border-slate-700/50 hover:border-slate-600"
+      )}
+    >
+      {isOpen && (
+        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+          Open
+        </span>
+      )}
+      <div className={classNames("w-9 h-9 rounded-lg flex items-center justify-center mb-3", bgColorMap[meta.color] || bgColorMap.emerald)}>
+        <Icon size={18} />
+      </div>
+      <h3 className="text-sm font-semibold text-slate-100 mb-1">{meta.name}</h3>
+      <p className="text-xs text-slate-500 leading-relaxed">{meta.description}</p>
+    </button>
+  )
+}
+
+function CalculatorsPage() {
+  const [openTabs, setOpenTabs] = useState<OpenCalculatorTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<CalculatorId | null>(null)
+
+  const openCalculator = useCallback((id: CalculatorId) => {
+    setOpenTabs((prev) => {
+      const exists = prev.find((t) => t.id === id)
+      if (exists) {
+        setActiveTabId(id)
+        return prev
+      }
+      if (prev.length >= 3) {
+        const sorted = [...prev].sort((a, b) => a.openedAt - b.openedAt)
+        const newTabs = sorted.slice(1)
+        newTabs.push({ id, openedAt: Date.now() })
+        setActiveTabId(id)
+        return newTabs
+      }
+      setActiveTabId(id)
+      return [...prev, { id, openedAt: Date.now() }]
+    })
+  }, [])
+
+  const closeTab = useCallback((id: CalculatorId) => {
+    setOpenTabs((prev) => {
+      const next = prev.filter((t) => t.id !== id)
+      if (activeTabId === id) {
+        setActiveTabId(next.length > 0 ? next[next.length - 1].id : null)
+      }
+      return next
+    })
+  }, [activeTabId])
+
+  const openTabIds = useMemo(() => new Set(openTabs.map((t) => t.id)), [openTabs])
+
+  const renderCalculator = useCallback((id: CalculatorId) => {
+    switch (id) {
+      case "position-size": return <PositionSizeCalc />
+      case "risk-reward": return <RiskRewardCalc />
+      case "pnl": return <PnlCalc />
+      case "options": return <OptionsCalc />
+      case "compound-growth": return <CompoundGrowthCalc />
+      case "margin": return <MarginCalc />
+      case "fibonacci": return <FibonacciCalc />
+      case "break-even": return <BreakEvenCalc />
+      case "adr": return <AdrCalc />
+      default: return null
+    }
+  }, [])
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-100 tracking-tight">Trading Calculators</h1>
+        <p className="text-sm text-slate-400 mt-1">Professional tools to size, analyze, and plan your trades</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
+        {CALCULATOR_REGISTRY.map((meta) => (
+          <CalculatorCard
+            key={meta.id}
+            meta={meta}
+            isOpen={openTabIds.has(meta.id)}
+            onClick={() => openCalculator(meta.id)}
+          />
+        ))}
+      </div>
+
+      {openTabs.length > 0 && (
+        <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-xl overflow-hidden">
+          <div className="flex items-center border-b border-slate-700/50 overflow-x-auto" role="tablist">
+            {openTabs.map((tab) => {
+              const meta = CALCULATOR_REGISTRY.find((m) => m.id === tab.id)
+              if (!meta) return null
+              const Icon = meta.icon
+              const isActive = activeTabId === tab.id
+              return (
+                <div
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  className={classNames(
+                    "flex items-center gap-2 px-4 py-3 text-sm font-medium cursor-pointer border-b-2 transition-colors whitespace-nowrap",
+                    isActive
+                      ? "text-emerald-400 border-emerald-500 bg-slate-800/40"
+                      : "text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800/20"
+                  )}
+                  onClick={() => setActiveTabId(tab.id)}
+                >
+                  <Icon size={15} />
+                  <span>{meta.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); closeTab(tab.id) }}
+                    className="ml-1 text-slate-500 hover:text-red-400 transition-colors rounded-full p-0.5 hover:bg-slate-700/50"
+                    aria-label={`Close ${meta.name}`}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="p-5" role="tabpanel">
+            {activeTabId && renderCalculator(activeTabId)}
+          </div>
+        </div>
+      )}
+
+      {openTabs.length === 0 && (
+        <div className="flex items-center justify-center py-16 text-center border border-dashed border-slate-700/50 rounded-xl">
+          <div>
+            <Calculator className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Click a calculator above to get started</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════
 // MAIN APP — Default Export
 // ═══════════════════════════════════════
@@ -2614,7 +3008,13 @@ export default function TradingDashboard() {
                 </div>
               )}
 
-              {activeView !== "dashboard" && activeView !== "journal" && activeView !== "analytics" && (
+              {activeView === "calculators" && (
+                <div className="max-w-7xl mx-auto">
+                  <CalculatorsPage />
+                </div>
+              )}
+
+              {activeView !== "dashboard" && activeView !== "journal" && activeView !== "analytics" && activeView !== "calculators" && (
                 <div className="flex items-center justify-center h-64">
                   <div className="text-center">
                     <Calendar className="w-12 h-12 text-slate-600 mx-auto mb-3" />
