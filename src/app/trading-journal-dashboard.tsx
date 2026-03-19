@@ -3166,9 +3166,389 @@ function MarginCalc() {
     </div>
   )
 }
-function FibonacciCalc() { return <p className="text-slate-400 text-sm">Fibonacci Levels Calculator — implementing...</p> }
-function BreakEvenCalc() { return <p className="text-slate-400 text-sm">Break-Even Calculator — implementing...</p> }
-function AdrCalc() { return <p className="text-slate-400 text-sm">ADR% Calculator — implementing...</p> }
+function FibonacciCalc() {
+  const [swingHigh, setSwingHigh] = useState("")
+  const [swingLow, setSwingLow] = useState("")
+  const [trend, setTrend] = useState<"up" | "down">("up")
+
+  const FIB_RETRACEMENTS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+  const FIB_EXTENSIONS = [1.272, 1.618, 2.0, 2.618]
+
+  const results = useMemo(() => {
+    const high = parseFloat(swingHigh)
+    const low = parseFloat(swingLow)
+    if (!high || !low || high <= low) return null
+    const range = high - low
+
+    const retracements = FIB_RETRACEMENTS.map((ratio) => {
+      const price = trend === "up" ? high - range * ratio : low + range * ratio
+      return { ratio, label: `${(ratio * 100).toFixed(1)}%`, price }
+    })
+
+    const extensions = FIB_EXTENSIONS.map((ratio) => {
+      const price = trend === "up" ? high + range * (ratio - 1) : low - range * (ratio - 1)
+      return { ratio, label: `${(ratio * 100).toFixed(1)}%`, price }
+    })
+
+    return { retracements, extensions, range }
+  }, [swingHigh, swingLow, trend])
+
+  const handleReset = useCallback(() => { setSwingHigh(""); setSwingLow(""); setTrend("up") }, [])
+  const isGoldenZone = (ratio: number) => ratio === 0.382 || ratio === 0.618
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <CalculatorField label="Swing High" value={swingHigh} onChange={setSwingHigh} prefix="$" placeholder="235.00" helperText="The highest price of the move — on TradingView: hover over the swing high candle's wick on any timeframe" />
+        <CalculatorField label="Swing Low" value={swingLow} onChange={setSwingLow} prefix="$" placeholder="210.00" helperText="The lowest price of the move — hover over the swing low candle's wick" />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Trend Direction</label>
+          <div className="flex rounded-lg overflow-hidden border border-slate-700" role="radiogroup">
+            {(["up", "down"] as const).map((dir) => (
+              <button key={dir} role="radio" aria-checked={trend === dir} onClick={() => setTrend(dir)} className={classNames("flex-1 py-2 text-sm font-semibold uppercase transition-colors", trend === dir ? dir === "up" ? "bg-emerald-600 text-white" : "bg-red-600 text-white" : "bg-slate-800/50 text-slate-400 hover:text-slate-200")}>
+                {dir === "up" ? "↑ Uptrend" : "↓ Downtrend"}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-slate-500">{trend === "up" ? "Measuring pullback from low → high" : "Measuring bounce from high → low"}</p>
+        </div>
+        {swingHigh && swingLow && parseFloat(swingHigh) <= parseFloat(swingLow) && (
+          <p className="text-xs text-red-400">Swing High must be greater than Swing Low</p>
+        )}
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Levels</h3>
+        {results ? (
+          <div className="space-y-4">
+            {/* Vertical Proportional Bar */}
+            <div className="my-4 relative h-48 bg-slate-800/40 rounded-lg border border-slate-700/30 overflow-hidden">
+              {results.retracements.map((level) => {
+                const pct = level.ratio * 100
+                return (
+                  <div key={level.label} className="absolute left-0 right-0 flex items-center px-3" style={{ top: `${pct}%`, transform: "translateY(-50%)" }}>
+                    <div className={classNames("h-px flex-1", isGoldenZone(level.ratio) ? "bg-amber-500/60" : "bg-slate-600/40")} />
+                    <span className={classNames("text-[9px] font-mono ml-2 whitespace-nowrap", isGoldenZone(level.ratio) ? "text-amber-400" : "text-slate-500")}>
+                      {level.label} — ${level.price.toFixed(2)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mb-2">Retracement Levels</p>
+              <div className="space-y-0.5">
+                {results.retracements.map((level) => (
+                  <div key={level.label} className={classNames("flex items-center justify-between py-1.5 px-2 rounded-md text-sm group", isGoldenZone(level.ratio) ? "bg-amber-500/10 border border-amber-500/20" : "hover:bg-slate-800/30")}>
+                    <div className="flex items-center gap-2">
+                      <span className={classNames("font-mono text-xs w-12", isGoldenZone(level.ratio) ? "text-amber-400 font-semibold" : "text-slate-400")}>{level.label}</span>
+                      {isGoldenZone(level.ratio) && <span className="text-[9px] text-amber-400/80 uppercase tracking-wider">Golden Zone</span>}
+                    </div>
+                    <span className="font-mono text-sm text-slate-100 tabular-nums font-medium">${level.price.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mb-2">Extension Levels</p>
+              <div className="space-y-0.5">
+                {results.extensions.map((level) => (
+                  <div key={level.label} className="flex items-center justify-between py-1.5 px-2 rounded-md text-sm hover:bg-slate-800/30 group">
+                    <span className="font-mono text-xs text-purple-400 w-12">{level.label}</span>
+                    <span className="font-mono text-sm text-slate-100 tabular-nums font-medium">${level.price.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Enter swing high and low to calculate levels</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BreakEvenCalc() {
+  const [winRate, setWinRate] = useState("50")
+  const [avgWin, setAvgWin] = useState("")
+  const [avgLoss, setAvgLoss] = useState("")
+  const [numTrades, setNumTrades] = useState("100")
+
+  const results = useMemo(() => {
+    const wr = parseFloat(winRate) / 100
+    const aw = parseFloat(avgWin)
+    const al = parseFloat(avgLoss)
+    const n = parseInt(numTrades, 10)
+
+    if (isNaN(wr) || !aw || !al || !n) return null
+
+    const expectancy = (wr * aw) - ((1 - wr) * al)
+    const expectedPnl = expectancy * n
+    const requiredWinRate = al / (aw + al)
+    const requiredRR = (1 - wr) / wr
+    const isProfitable = expectancy > 0
+
+    const chartData: { trade: number; equity: number }[] = [{ trade: 0, equity: 0 }]
+    let equity = 0
+    let seed = 42
+    const pseudoRandom = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+    for (let i = 1; i <= Math.min(n, 200); i++) {
+      const isWin = pseudoRandom() < wr
+      equity += isWin ? aw : -al
+      chartData.push({ trade: i, equity })
+    }
+
+    return { expectancy, expectedPnl, requiredWinRate, requiredRR, isProfitable, chartData }
+  }, [winRate, avgWin, avgLoss, numTrades])
+
+  const handleReset = useCallback(() => { setWinRate("50"); setAvgWin(""); setAvgLoss(""); setNumTrades("100") }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+        </div>
+        <CalculatorField label="Win Rate" value={winRate} onChange={setWinRate} suffix="%" placeholder="50" helperText="Your historical win rate — check your journal's Insights panel" />
+        <CalculatorField label="Average Win" value={avgWin} onChange={setAvgWin} prefix="$" placeholder="500" helperText="Your average winning trade P&L — found in journal Analytics or compute manually from trade history" />
+        <CalculatorField label="Average Loss" value={avgLoss} onChange={setAvgLoss} prefix="$" placeholder="250" helperText="Your average losing trade P&L (enter as positive number) — found in journal Analytics" />
+        <CalculatorField label="Trades to Simulate" value={numTrades} onChange={setNumTrades} placeholder="100" helperText="How many trades to simulate for the equity projection" />
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
+        {results ? (
+          <div className="space-y-4">
+            <div className={classNames("flex items-center gap-3 p-3 rounded-lg border", results.isProfitable ? "bg-emerald-500/10 border-emerald-500/30" : "bg-red-500/10 border-red-500/30")}>
+              {results.isProfitable ? <Check size={20} className="text-emerald-400" /> : <X size={20} className="text-red-400" />}
+              <div>
+                <p className={classNames("text-sm font-semibold", results.isProfitable ? "text-emerald-400" : "text-red-400")}>{results.isProfitable ? "Profitable System" : "Losing System"}</p>
+                <p className="text-xs text-slate-400">{results.isProfitable ? "This system has a positive edge over time" : "Adjust your R:R ratio or improve your win rate"}</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <CalculatorResultRow label="Expectancy per Trade" value={`${results.expectancy >= 0 ? "+" : ""}$${results.expectancy.toFixed(2)}`} variant={results.expectancy >= 0 ? "profit" : "loss"} large />
+              <CalculatorResultRow label={`Expected P&L (${numTrades} trades)`} value={`${results.expectedPnl >= 0 ? "+" : ""}$${results.expectedPnl.toFixed(2)}`} variant={results.expectedPnl >= 0 ? "profit" : "loss"} />
+              <CalculatorResultRow label="Required Win Rate" value={`${(results.requiredWinRate * 100).toFixed(1)}%`} subtext="Win rate needed to break even at current R:R" />
+              <CalculatorResultRow label="Required R:R" value={`${results.requiredRR.toFixed(2)} : 1`} subtext="R:R needed to break even at current win rate" />
+            </div>
+            <div className="h-40 mt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={results.chartData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                  <defs>
+                    <linearGradient id="beGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={results.isProfitable ? "#10b981" : "#ef4444"} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={results.isProfitable ? "#10b981" : "#ef4444"} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="trade" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} tickLine={false} />
+                  <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} tickLine={false} tickFormatter={(v) => `$${v.toFixed(0)}`} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: "8px", fontSize: "12px" }} formatter={(value) => [`$${Number(value).toFixed(2)}`, "Equity"]} labelFormatter={(label) => `Trade #${label}`} />
+                  <Area type="monotone" dataKey="equity" stroke={results.isProfitable ? "#10b981" : "#ef4444"} fill="url(#beGradient)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Fill in win rate, average win, and average loss to analyze</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AdrCalc() {
+  const [symbol, setSymbol] = useState("")
+  const [lookback, setLookback] = useState("5")
+  const [rows, setRows] = useState<{ high: string; low: string; close: string }[]>(
+    Array.from({ length: 5 }, () => ({ high: "", low: "", close: "" }))
+  )
+  const [pasteMode, setPasteMode] = useState(false)
+  const [pasteText, setPasteText] = useState("")
+
+  const updateRow = useCallback((index: number, field: "high" | "low" | "close", value: string) => {
+    setRows((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    const n = parseInt(lookback, 10) || 5
+    setRows((prev) => {
+      if (prev.length === n) return prev
+      if (prev.length < n) return [...prev, ...Array.from({ length: n - prev.length }, () => ({ high: "", low: "", close: "" }))]
+      return prev.slice(0, n)
+    })
+  }, [lookback])
+
+  const handlePaste = useCallback(() => {
+    const lines = pasteText.trim().split("\n")
+    const parsed = lines.map((line) => {
+      const parts = line.split(/[,\t]+/).map((s) => s.trim())
+      return { high: parts[0] || "", low: parts[1] || "", close: parts[2] || "" }
+    })
+    setRows(parsed)
+    setLookback(String(parsed.length))
+    setPasteMode(false)
+    setPasteText("")
+  }, [pasteText])
+
+  const results = useMemo(() => {
+    const validRows = rows.filter((r) => {
+      const h = parseFloat(r.high)
+      const l = parseFloat(r.low)
+      return h > 0 && l > 0 && h >= l
+    })
+    if (validRows.length === 0) return null
+
+    const perDay = validRows.map((r, i) => {
+      const h = parseFloat(r.high)
+      const l = parseFloat(r.low)
+      const c = parseFloat(r.close)
+      const rangeDollar = h - l
+      const rangePct = c > 0 ? (rangeDollar / c) * 100 : null
+      return { day: i + 1, high: h, low: l, close: c, rangeDollar, rangePct }
+    })
+
+    const adrDollar = perDay.reduce((s, d) => s + d.rangeDollar, 0) / perDay.length
+    const pctRows = perDay.filter((d) => d.rangePct !== null)
+    const adrPct = pctRows.length > 0 ? pctRows.reduce((s, d) => s + (d.rangePct || 0), 0) / pctRows.length : null
+
+    return { perDay, adrDollar, adrPct, validCount: validRows.length, completeCount: pctRows.length }
+  }, [rows])
+
+  const handleReset = useCallback(() => {
+    setSymbol(""); setLookback("5")
+    setRows(Array.from({ length: 5 }, () => ({ high: "", low: "", close: "" })))
+  }, [])
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">Inputs</h3>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPasteMode(!pasteMode)} className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">{pasteMode ? "Cancel" : "Paste Data"}</button>
+            <button onClick={handleReset} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Reset</button>
+          </div>
+        </div>
+        <CalculatorField label="Symbol" value={symbol} onChange={setSymbol} type="text" placeholder="AAPL" helperText="The ticker you're analyzing — for reference only, all prices entered manually" />
+        <CalculatorField label="Lookback Period" value={lookback} onChange={setLookback} placeholder="5" helperText="Number of trading days to average — 5 (1 week), 10 (2 weeks), or 20 (1 month) are standard" />
+
+        {pasteMode ? (
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Paste High, Low, Close (one row per line, tab or comma separated)</label>
+            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={"235.50, 228.00, 232.40\n234.00, 229.50, 231.80\n233.20, 227.80, 230.10"} className="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 font-mono h-32 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500" />
+            <Button size="sm" onClick={handlePaste}>Apply</Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Daily Data</label>
+            </div>
+            <p className="text-[10px] text-slate-500 mb-2">Find on TradingView: switch to 1D timeframe, hover over each candle. Most recent day first.</p>
+            <div className="grid grid-cols-[2rem_1fr_1fr_1fr] gap-1 text-[10px] text-slate-500 uppercase tracking-wider font-medium px-1">
+              <span>#</span><span>High</span><span>Low</span><span>Close</span>
+            </div>
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {rows.map((row, i) => (
+                <div key={i} className="grid grid-cols-[2rem_1fr_1fr_1fr] gap-1 items-center">
+                  <span className="text-[10px] text-slate-600 text-center">{i + 1}</span>
+                  <input type="number" value={row.high} onChange={(e) => updateRow(i, "high", e.target.value)} placeholder="H" className="bg-slate-900/80 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500/40 w-full" />
+                  <input type="number" value={row.low} onChange={(e) => updateRow(i, "low", e.target.value)} placeholder="L" className="bg-slate-900/80 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500/40 w-full" />
+                  <input type="number" value={row.close} onChange={(e) => updateRow(i, "close", e.target.value)} placeholder="C" className="bg-slate-900/80 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500/40 w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">
+          Results {symbol && <span className="text-emerald-400 normal-case">— {symbol.toUpperCase()}</span>}
+        </h3>
+        {results ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center p-3 bg-slate-800/40 rounded-lg border border-slate-700/30">
+                {results.adrPct !== null ? (
+                  <p className="text-2xl font-bold font-mono tabular-nums text-emerald-400">{results.adrPct.toFixed(2)}%</p>
+                ) : (
+                  <p className="text-2xl font-bold font-mono tabular-nums text-slate-500">—</p>
+                )}
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">ADR%</p>
+              </div>
+              <div className="text-center p-3 bg-slate-800/40 rounded-lg border border-slate-700/30">
+                <p className="text-2xl font-bold font-mono tabular-nums text-slate-100">${results.adrDollar.toFixed(2)}</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">ADR$</p>
+              </div>
+            </div>
+
+            {/* Today's range usage */}
+            {results.perDay.length > 0 && results.perDay[0].rangeDollar > 0 && (
+              <div className="p-3 bg-slate-800/40 rounded-lg border border-slate-700/30">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-400">Today&apos;s Range Used</span>
+                  <span className={classNames("font-mono font-semibold",
+                    (results.perDay[0].rangeDollar / results.adrDollar) * 100 > 100 ? "text-red-400" :
+                    (results.perDay[0].rangeDollar / results.adrDollar) * 100 > 80 ? "text-amber-400" : "text-emerald-400"
+                  )}>
+                    {((results.perDay[0].rangeDollar / results.adrDollar) * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div className={classNames("h-full rounded-full transition-all",
+                    (results.perDay[0].rangeDollar / results.adrDollar) * 100 > 100 ? "bg-red-500" :
+                    (results.perDay[0].rangeDollar / results.adrDollar) * 100 > 80 ? "bg-amber-500" : "bg-emerald-500"
+                  )} style={{ width: `${Math.min(100, (results.perDay[0].rangeDollar / results.adrDollar) * 100)}%` }} />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">Today: ${results.perDay[0].rangeDollar.toFixed(2)} of ${results.adrDollar.toFixed(2)} avg range</p>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <CalculatorResultRow label="Suggested Stop (0.5× ADR)" value={`$${(results.adrDollar * 0.5).toFixed(2)}`} subtext="Common rule: don't set stops tighter than half the ADR" variant="warning" />
+              <CalculatorResultRow label="Suggested Target (1× ADR)" value={`$${results.adrDollar.toFixed(2)}`} subtext="Full ADR as a realistic daily target" variant="profit" />
+            </div>
+
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mb-2">Daily Breakdown</p>
+              <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wider grid grid-cols-6 gap-1 px-2 py-1 border-b border-slate-700/50">
+                <span>Day</span><span>High</span><span>Low</span><span>Close</span><span>Range $</span><span>Range %</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto">
+                {results.perDay.map((d) => (
+                  <div key={d.day} className={classNames("grid grid-cols-6 gap-1 px-2 py-1 text-xs font-mono text-slate-300 border-b border-slate-800/30", d.rangePct === null && "opacity-50")}>
+                    <span className="text-slate-500">{d.day}</span>
+                    <span>${d.high.toFixed(2)}</span>
+                    <span>${d.low.toFixed(2)}</span>
+                    <span>{d.close > 0 ? `$${d.close.toFixed(2)}` : <span className="text-amber-400 text-[10px]">missing</span>}</span>
+                    <span>${d.rangeDollar.toFixed(2)}</span>
+                    <span>{d.rangePct !== null ? `${d.rangePct.toFixed(2)}%` : "—"}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-6 gap-1 px-2 py-1.5 text-xs font-mono font-semibold text-emerald-400 border-t border-slate-700/50 bg-slate-800/20">
+                <span>AVG</span><span></span><span></span><span></span>
+                <span>${results.adrDollar.toFixed(2)}</span>
+                <span>{results.adrPct !== null ? `${results.adrPct.toFixed(2)}%` : "—"}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-10 text-slate-600 text-sm">Enter at least one day of High/Low data to calculate ADR</div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function CalculatorCard({
   meta,
