@@ -2573,11 +2573,12 @@ function CalculatorField({
   className = "",
 }: CalculatorFieldProps) {
   const [showHelper, setShowHelper] = useState(false)
+  const fieldId = useMemo(() => `calc-field-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`, [label])
 
   return (
     <div className={classNames("flex flex-col gap-1.5", className)}>
       <div className="flex items-center gap-1.5">
-        <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+        <label htmlFor={fieldId} className="text-xs font-medium text-slate-400 uppercase tracking-wider">
           {label}
         </label>
         {helperText && (
@@ -2605,6 +2606,7 @@ function CalculatorField({
           </span>
         )}
         <input
+          id={fieldId}
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -2730,7 +2732,7 @@ function PositionSizeCalc() {
         <CalculatorField label="Entry Price" value={entryPrice} onChange={setEntryPrice} prefix="$" placeholder="220.00" helperText="The price you plan to enter at — use your broker's Level 2 or TradingView last price" />
         <CalculatorField label="Stop Loss Price" value={stopLoss} onChange={setStopLoss} prefix="$" placeholder="215.00" helperText="Your invalidation level — the price where your thesis is wrong" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-1">
@@ -2796,7 +2798,7 @@ function RiskRewardCalc() {
         <CalculatorField label="Take Profit" value={takeProfit} onChange={setTakeProfit} prefix="$" placeholder="232.00" helperText="Your target exit price — use key levels, supply/demand zones, or prior highs/lows on chart" />
         <CalculatorField label="Win Rate" value={winRate} onChange={setWinRate} suffix="%" placeholder="50" helperText="Your historical win rate — find this on your journal's Insights panel under 'Win Rate'" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-1">
@@ -2878,7 +2880,7 @@ function PnlCalc() {
         <CalculatorField label="Commission (per trade)" value={commission} onChange={setCommission} prefix="$" placeholder="0.00" helperText="Check your broker's fee schedule — e.g., IBKR: $0.005/share, Webull/Robinhood: $0" />
         <CalculatorField label="Other Fees" value={otherFees} onChange={setOtherFees} prefix="$" placeholder="0.00" helperText="SEC fees, exchange fees, ECN fees — usually shown on your trade confirmation" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-1">
@@ -2974,7 +2976,7 @@ function OptionsCalc() {
         <CalculatorField label="Implied Volatility" value={iv} onChange={setIv} suffix="%" placeholder="30" helperText="IV is listed per strike in your options chain — Thinkorswim: 'Impl Vol' column, TastyTrade: shown on the trade page" />
         <CalculatorField label="Risk-Free Rate" value={riskFreeRate} onChange={setRiskFreeRate} suffix="%" placeholder="4.3" helperText="US 10-Year Treasury yield — search 'US10Y' on TradingView or google 'treasury yield today'" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-1">
@@ -3029,11 +3031,12 @@ function CompoundGrowthCalc() {
     }
 
     const finalBalance = balance
-    const totalContributions = start + contrib * periods
+    const totalAdditionalContributions = contrib * periods
+    const totalContributions = start + totalAdditionalContributions
     const totalReturn = finalBalance - totalContributions
     const totalReturnPct = ((finalBalance - start) / start) * 100
 
-    return { finalBalance, totalReturn, totalReturnPct, totalContributions, chartData, growthFromCompounding: totalReturn }
+    return { finalBalance, totalReturn, totalReturnPct, totalContributions, totalAdditionalContributions, chartData, growthFromCompounding: totalReturn }
   }, [startingCapital, returnPerPeriod, numPeriods, contribution])
 
   const handleReset = useCallback(() => {
@@ -3061,14 +3064,14 @@ function CompoundGrowthCalc() {
         <CalculatorField label="Number of Periods" value={numPeriods} onChange={setNumPeriods} placeholder="52" helperText="How many periods to project — e.g., 52 weeks = 1 year, 12 months = 1 year" />
         <CalculatorField label="Additional Contribution" value={contribution} onChange={setContribution} prefix="$" placeholder="0" helperText="Extra capital added each period — e.g., monthly deposit from salary" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-4">
             <div className="space-y-1">
               <CalculatorResultRow label="Final Balance" value={`$${results.finalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} variant="profit" large />
               <CalculatorResultRow label="Total Return" value={`+$${results.totalReturn.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} subtext={`${results.totalReturnPct.toFixed(1)}% total`} variant="profit" />
-              <CalculatorResultRow label="Total Contributions" value={`$${results.totalContributions.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <CalculatorResultRow label="Additional Contributions" value={`$${results.totalAdditionalContributions.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} subtext={`${numPeriods} deposits of $${(parseFloat(contribution) || 0).toFixed(2)}`} />
               <CalculatorResultRow label="Growth from Compounding" value={`$${results.growthFromCompounding.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} variant="profit" />
             </div>
             <div className="h-48 mt-2">
@@ -3140,7 +3143,7 @@ function MarginCalc() {
         <CalculatorField label="Account Equity" value={accountEquity} onChange={setAccountEquity} prefix="$" placeholder="50,000" helperText="Your account's net liquidation value — found on broker's account summary or portfolio page" />
         <CalculatorField label="Maintenance Margin" value={maintenanceMargin} onChange={setMaintenanceMargin} suffix="%" placeholder="25" helperText="Minimum equity % before margin call — Reg-T default: 25%, but brokers may require 30–40%" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-4">
@@ -3220,7 +3223,7 @@ function FibonacciCalc() {
           <p className="text-xs text-red-400">Swing High must be greater than Swing Low</p>
         )}
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Levels</h3>
         {results ? (
           <div className="space-y-4">
@@ -3319,7 +3322,7 @@ function BreakEvenCalc() {
         <CalculatorField label="Average Loss" value={avgLoss} onChange={setAvgLoss} prefix="$" placeholder="250" helperText="Your average losing trade P&L (enter as positive number) — found in journal Analytics" />
         <CalculatorField label="Trades to Simulate" value={numTrades} onChange={setNumTrades} placeholder="100" helperText="How many trades to simulate for the equity projection" />
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">Results</h3>
         {results ? (
           <div className="space-y-4">
@@ -3470,7 +3473,7 @@ function AdrCalc() {
           </div>
         )}
       </div>
-      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30">
+      <div className="lg:col-span-3 bg-slate-800/40 rounded-xl p-5 border border-slate-700/30" aria-live="polite">
         <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider mb-4">
           Results {symbol && <span className="text-emerald-400 normal-case">— {symbol.toUpperCase()}</span>}
         </h3>
@@ -3653,7 +3656,7 @@ function CalculatorsPage() {
         <p className="text-sm text-slate-400 mt-1">Professional tools to size, analyze, and plan your trades</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
         {CALCULATOR_REGISTRY.map((meta) => (
           <CalculatorCard
             key={meta.id}
